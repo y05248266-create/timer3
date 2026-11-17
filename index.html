@@ -1,0 +1,1731 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>25:00 | Webタイマー</title>
+  <style>
+    /* --- ライトモード（デフォルト） --- */
+    :root {
+      --bg-color: #ffffff;
+      --text-color: #000000;
+      --task-color: #111111;
+      --divider-color: #000000;
+      --panel-bg: #f2f4f7;
+      --panel-border: #d0d7de;
+      --input-bg: #ffffff;
+      --input-text: #000000;
+      --accent-color: #2e7d32;
+      --btn-secondary: #4a5568;
+      --progress-bg: #e2e8f0;
+      --progress-color: #ed8936;
+      --timeup-bg: #fed7d7;
+      --subtext-color: #555555;
+      --kbd-bg: #ffffff;
+      --kbd-border: #cccccc;
+      --modal-bg: #ffffff;
+      --modal-overlay: rgba(0, 0, 0, 0.5);
+    }
+
+    /* --- ダークモード --- */
+    body.dark-theme {
+      --bg-color: #121212;
+      --text-color: #ffffff;
+      --task-color: #ffffff;
+      --divider-color: #ffffff;
+      --panel-bg: rgba(255, 255, 255, 0.08);
+      --panel-border: #333333;
+      --input-bg: #222222;
+      --input-text: #ffffff;
+      --accent-color: #4caf50;
+      --btn-secondary: #4a5568;
+      --progress-bg: rgba(255, 255, 255, 0.1);
+      --progress-color: #ff9800;
+      --timeup-bg: #7f1d1d;
+      --subtext-color: #aaaaaa;
+      --kbd-bg: #333333;
+      --kbd-border: #555555;
+      --modal-bg: #1e1e1e;
+      --modal-overlay: rgba(0, 0, 0, 0.75);
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      box-sizing: border-box;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .header-buttons-container {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+    }
+
+    .header-btn {
+      background-color: var(--panel-bg);
+      color: var(--text-color);
+      border: 1px solid var(--panel-border);
+      padding: 4px 10px;
+      font-size: 0.8rem;
+      border-radius: 20px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .clock-display {
+      position: absolute;
+      bottom: 8px;
+      left: 15px;
+      font-size: 0.95rem;
+      font-weight: bold;
+      color: var(--subtext-color);
+      font-family: 'Courier New', Courier, monospace;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .progress-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 8px;
+      background-color: var(--progress-bg);
+      z-index: 5;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 100%;
+      background-color: var(--progress-color);
+      transition: width 0.3s linear, background-color 0.3s;
+    }
+
+    /* メイン表示領域 */
+    .display-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100vw;
+      flex-grow: 1;
+      padding: 10px;
+      box-sizing: border-box;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .task-display {
+      font-weight: 900;
+      text-align: center;
+      max-width: 90vw;
+      word-wrap: break-word;
+      color: var(--task-color);
+      letter-spacing: 1px;
+      line-height: 1.05;
+      transition: font-size 0.15s ease;
+      display: none;
+      margin-bottom: 2px;
+      flex-shrink: 1;
+      min-height: 0;
+    }
+
+    .task-display.has-text {
+      display: block;
+    }
+
+    .divider {
+      width: 85vw;
+      height: 3px;
+      background-color: var(--divider-color);
+      margin: 4px 0;
+      border-radius: 2px;
+      transition: background-color 0.3s;
+      display: none;
+      flex-shrink: 0;
+    }
+
+    .divider.has-text {
+      display: block;
+    }
+
+    /* タイマー表示 */
+    .timer-display {
+      font-size: min(22vw, 28vh);
+      font-weight: 900;
+      font-family: 'Courier New', Courier, monospace;
+      line-height: 0.85;
+      user-select: none;
+      letter-spacing: -2px;
+      color: var(--text-color);
+      transition: font-size 0.15s ease, color 0.3s ease;
+      flex-shrink: 0;
+      text-align: center;
+    }
+
+    .timer-display.solo-mode {
+      font-size: min(25vw, 35vh);
+    }
+
+    .timer-display.end-mode {
+      font-size: min(14vw, 18vh) !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      letter-spacing: 0;
+    }
+
+    /* 全画面オーバーレイメッセージ */
+    .fullscreen-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 40px;
+      box-sizing: border-box;
+      text-align: center;
+      cursor: pointer;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .fullscreen-overlay.show {
+      display: flex;
+    }
+
+    .fullscreen-overlay-text {
+      font-size: min(12vw, 16vh);
+      font-weight: 900;
+      line-height: 1.25;
+      word-break: break-word;
+      user-select: none;
+    }
+
+    .fullscreen-overlay-hint {
+      position: absolute;
+      bottom: 20px;
+      font-size: 0.85rem;
+      color: var(--subtext-color);
+      opacity: 0.7;
+    }
+
+    /* モーダル説明書 */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: var(--modal-overlay);
+      z-index: 10000;
+      display: none;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal-content {
+      background-color: var(--modal-bg);
+      color: var(--text-color);
+      border: 1px solid var(--panel-border);
+      border-radius: 12px;
+      width: 100%;
+      max-width: 780px;
+      max-height: 85vh;
+      overflow-y: auto;
+      padding: 24px;
+      box-sizing: border-box;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+      position: relative;
+      line-height: 1.65;
+    }
+
+    .modal-close-btn {
+      position: absolute;
+      top: 15px;
+      right: 15px;
+      background: transparent;
+      border: none;
+      font-size: 1.5rem;
+      color: var(--text-color);
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px 8px;
+    }
+
+    .modal-content h2 {
+      margin-top: 0;
+      border-bottom: 2px solid var(--accent-color);
+      padding-bottom: 8px;
+      font-size: 1.35rem;
+    }
+
+    .modal-content h3 {
+      margin-top: 20px;
+      margin-bottom: 8px;
+      font-size: 1.08rem;
+      color: var(--accent-color);
+    }
+
+    .modal-content ol, .modal-content ul {
+      padding-left: 20px;
+      margin-top: 6px;
+      margin-bottom: 12px;
+    }
+
+    .modal-content li {
+      margin-bottom: 5px;
+    }
+
+    .modal-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+      margin-bottom: 16px;
+      font-size: 0.9rem;
+    }
+
+    .modal-content th, .modal-content td {
+      border: 1px solid var(--panel-border);
+      padding: 8px;
+      text-align: left;
+    }
+
+    .modal-content th {
+      background-color: var(--panel-bg);
+    }
+
+    .warning-orange { color: #ff9800 !important; }
+    .warning-red { color: #f44336 !important; }
+
+    /* コントロールパネル */
+    .controls {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      padding: 8px 12px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+      margin-bottom: 6px;
+      max-width: 98vw;
+      max-height: 62vh;
+      overflow-y: auto;
+      z-index: 20;
+      box-sizing: border-box;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 5px;
+      width: 100%;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .task-input, .end-msg-input, .alert-input, .direct-time-input, .sound-select {
+      padding: 4px 8px;
+      font-size: 0.82rem;
+      border: 1px solid var(--panel-border);
+      background: var(--input-bg);
+      color: var(--input-text);
+      border-radius: 6px;
+      text-align: center;
+      font-weight: bold;
+      box-sizing: border-box;
+    }
+
+    .task-input { width: 175px; }
+    .end-msg-input { width: 95px; }
+    .alert-input { width: 200px; }
+    .sound-select { text-align: left; cursor: pointer; }
+
+    .direct-time-input {
+      width: 195px;
+      max-width: 60vw;
+      background-color: #fffde7;
+      border-color: #fbc02d;
+      ime-mode: disabled;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    body.dark-theme .direct-time-input {
+      background-color: #332d00;
+      border-color: #fbc02d;
+    }
+
+    /* プリセットチップ共通 */
+    .chips-row {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      max-width: 860px;
+    }
+
+    .chip-btn {
+      background-color: var(--input-bg);
+      color: var(--text-color);
+      border: 1px solid var(--panel-border);
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      border-radius: 12px;
+      font-weight: bold;
+    }
+
+    .chip-btn:hover {
+      background-color: var(--accent-color);
+      color: #ffffff;
+      opacity: 1;
+    }
+
+    .custom-slots-container {
+      display: inline-flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .custom-slot-group {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #d97706;
+      border-radius: 12px;
+      overflow: hidden;
+      background-color: var(--input-bg);
+    }
+
+    .custom-slot-group.task-slot {
+      border-color: var(--accent-color);
+    }
+
+    .custom-chip-btn {
+      background: transparent;
+      color: var(--text-color);
+      border: none;
+      border-radius: 0;
+      padding: 2px 6px;
+      font-size: 0.72rem;
+      max-width: 105px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .custom-chip-btn:hover {
+      background-color: #d97706;
+      color: #ffffff;
+      opacity: 1;
+    }
+
+    .custom-slot-group.task-slot .custom-chip-btn:hover {
+      background-color: var(--accent-color);
+      color: #ffffff;
+    }
+
+    .custom-save-btn {
+      background-color: #d97706;
+      color: #ffffff;
+      border: none;
+      border-radius: 0;
+      padding: 2px 5px;
+      font-size: 0.68rem;
+      border-left: 1px solid #d97706;
+    }
+
+    .custom-slot-group.task-slot .custom-save-btn {
+      background-color: var(--accent-color);
+      border-left-color: var(--accent-color);
+    }
+
+    .custom-del-btn {
+      background-color: #718096;
+      color: #ffffff;
+      border: none;
+      border-radius: 0;
+      padding: 2px 5px;
+      font-size: 0.68rem;
+    }
+
+    .add-slot-btn {
+      background-color: transparent;
+      color: #d97706;
+      border: 1px dashed #d97706;
+      padding: 2px 7px;
+      font-size: 0.71rem;
+      border-radius: 12px;
+    }
+
+    .add-slot-btn:hover {
+      background-color: #d97706;
+      color: #ffffff;
+      opacity: 1;
+    }
+
+    .add-slot-btn.task-add {
+      color: var(--accent-color);
+      border-color: var(--accent-color);
+    }
+
+    .add-slot-btn.task-add:hover {
+      background-color: var(--accent-color);
+      color: #ffffff;
+    }
+
+    .preset-buttons, .quick-buttons, .buttons, .audio-controls {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      max-width: 860px;
+    }
+
+    button {
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      font-weight: bold;
+      color: #ffffff;
+      background-color: var(--accent-color);
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: opacity 0.2s, background-color 0.2s;
+      white-space: nowrap;
+    }
+
+    button:hover { opacity: 0.85; }
+    button:disabled { background-color: #9e9e9e; cursor: not-allowed; opacity: 0.6; }
+    .btn-secondary { background-color: var(--btn-secondary); }
+    .btn-preset { background-color: #0077cc; }
+    .btn-alert { background-color: #4a5568; }
+    .btn-action { background-color: #d97706; }
+
+    .audio-controls {
+      font-size: 0.78rem;
+      color: var(--text-color);
+      font-weight: bold;
+      gap: 8px;
+    }
+
+    .audio-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .volume-status {
+      font-size: 0.72rem;
+      color: var(--subtext-color);
+      min-width: 96px;
+      text-align: left;
+    }
+
+    .pre-alarm-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .shortcut-info {
+      font-size: 0.72rem;
+      color: var(--subtext-color);
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      border-top: 1px solid var(--panel-border);
+      padding-top: 4px;
+      margin-top: 1px;
+    }
+
+    kbd {
+      background-color: var(--kbd-bg);
+      border: 1px solid var(--kbd-border);
+      border-radius: 3px;
+      box-shadow: 0 1px 1px rgba(0,0,0,0.2);
+      color: var(--text-color);
+      font-family: monospace;
+      font-size: 0.68rem;
+      padding: 1px 4px;
+      font-weight: bold;
+    }
+
+    /* タイムアップ通常点滅 */
+    .time-up {
+      animation: blink 0.8s infinite alternate;
+    }
+
+    @keyframes blink {
+      0% { background-color: var(--bg-color); }
+      100% { background-color: var(--timeup-bg); }
+    }
+
+    /* ミュート時の強い画面＆枠フラッシュ演出 */
+    .time-up-mute {
+      animation: muteFlash 0.45s infinite alternate;
+    }
+
+    @keyframes muteFlash {
+      0% {
+        background-color: var(--bg-color);
+        box-shadow: inset 0 0 0 0px transparent;
+      }
+      100% {
+        background-color: #ff4d4d;
+        box-shadow: inset 0 0 0 28px #d32f2f;
+      }
+    }
+
+    /* ミュート時の予鈴（残り1分）フラッシュ演出 */
+    .pre-alarm-flash {
+      animation: preFlash 0.4s 2 alternate;
+    }
+
+    @keyframes preFlash {
+      0% {
+        box-shadow: inset 0 0 0 0px transparent;
+      }
+      100% {
+        box-shadow: inset 0 0 0 24px #ff9800;
+      }
+    }
+
+    /* --- 全画面表示時 --- */
+    :fullscreen .controls, :fullscreen .header-buttons-container { display: none !important; }
+    :fullscreen .display-container { padding: 2vh 2vw; justify-content: center; }
+    :fullscreen .divider.has-text { width: 85vw; height: min(6px, 1vh); margin: 1.5vh 0; }
+    :fullscreen .timer-display { font-size: min(25vw, 42vh); }
+    :fullscreen .timer-display.solo-mode { font-size: min(27vw, 48vh); }
+    :fullscreen .timer-display.end-mode { font-size: min(15vw, 25vh) !important; }
+    :fullscreen .clock-display { font-size: min(1.8rem, 3.6vh); bottom: 20px; left: 25px; }
+
+    :-webkit-full-screen .controls, :-webkit-full-screen .header-buttons-container { display: none !important; }
+    :-webkit-full-screen .display-container { padding: 2vh 2vw; justify-content: center; }
+    :-webkit-full-screen .divider.has-text { width: 85vw; height: min(6px, 1vh); margin: 1.5vh 0; }
+    :-webkit-full-screen .timer-display { font-size: min(25vw, 42vh); }
+    :-webkit-full-screen .timer-display.solo-mode { font-size: min(27vw, 48vh); }
+    :-webkit-full-screen .timer-display.end-mode { font-size: min(15vw, 25vh) !important; }
+    :-webkit-full-screen .clock-display { font-size: min(1.8rem, 3.6vh); bottom: 20px; left: 25px; }
+  </style>
+</head>
+<body>
+
+  <div class="header-buttons-container">
+    <button type="button" class="header-btn" onclick="openModal()">📖 説明書</button>
+    <button type="button" class="header-btn" id="themeBtn" onclick="toggleTheme()">🌙 ダークモード</button>
+  </div>
+
+  <div class="progress-container">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <div class="display-container" id="mainArea">
+    <div class="task-display" id="taskDisplay"></div>
+    <div class="divider" id="divider"></div>
+    <div class="timer-display solo-mode" id="display">25:00</div>
+  </div>
+
+  <!-- 全画面オーバーレイメッセージ -->
+  <div class="fullscreen-overlay" id="fullscreenOverlay" onclick="hideFullMessage(false)">
+    <div class="fullscreen-overlay-text" id="overlayText">静かに話を聞きましょう</div>
+    <div class="fullscreen-overlay-hint">画面クリック または [M] / [Esc] で戻る</div>
+  </div>
+
+  <!-- モーダル説明書 -->
+  <div class="modal-overlay" id="helpModal" onclick="closeModalOnOverlay(event)">
+    <div class="modal-content">
+      <button type="button" class="modal-close-btn" title="閉じる [Esc]" onclick="closeModal()">&times;</button>
+      <h2>📖 授業・プレゼン用 高機能Webタイマー 取扱説明書</h2>
+      
+      <h3>🌟 このタイマーの特長</h3>
+      <ul>
+        <li><strong>教室の後ろからでも見やすい極大表示：</strong> 課題名の文字数に応じてフォントサイズを自動最適化します。プロジェクターや電子黒板への投影に最適です。</li>
+        <li><strong>画面スリープ自動防止：</strong> タイマー作動中はPC・タブレットの自動ロックや画面暗転を自動で防ぎます。</li>
+        <li><strong>「元の時間に戻す」リピート機能：</strong> <code>R</code> キーや「元の時間に戻す」ボタンで直前にセットした時間へ即座に戻るため、グループ発表やローテーション活動の連続進行がスムーズです（<code>00:00</code> にしたいときは「00:00にする」または <code>Z</code> キー）。</li>
+        <li><strong>終了予定時刻＆ブラウザタブ表示：</strong> 左下の現在時刻の横に「<code>14:25 終了予定</code>」をリアルタイム表示。ブラウザのタブ名にも残り時間が表示されるため、別タブでスライドを操作中でも進行状況が把握できます。</li>
+        <li><strong>課題名・指示文の定型文＆マイ登録機能：</strong> よく使う課題名や指示文をワンクリックで切り替えられます。さらに自分の好きな言葉をブラウザに保存でき、「＋ 枠追加」で登録枠を最大10個まで増やせます。</li>
+        <li><strong>予鈴＆3種類の音色＋無音フラッシュ演出：</strong> 残り1分でタイマーを止めずに1回鳴らす「予鈴」機能と、「電子音 / 学校チャイム / ベル」の音色選択に対応。音量 <code>0%</code>（ミュート）時は、音を出さずに画面と赤枠が強くフラッシュして終了を知らせます。</li>
+        <li><strong>テンキー直打ち自動半角：</strong> 入力欄をクリックしなくても、いきなり数字キーを打って <code>Enter</code> を押すだけで時間をセットできます（日本語入力ONでも自動で半角数字になります）。</li>
+        <li><strong>完全無料・通信なし・広告なし：</strong> 入力した課題名や登録ワードが外部サーバーへ送信されることは一切ありません。</li>
+      </ul>
+
+      <h3>🚀 基本的な使い方</h3>
+      <ol>
+        <li><strong>時間をセットする：</strong> プリセットボタン（1分〜60分）を押すか、キーボードで直接数字を打って（例：<code>0321</code> ➔ 3分21秒）<code>Enter</code> を押します。<code>↑</code> / <code>↓</code> キーで1分単位、<code>←</code> / <code>→</code> キーで10秒単位の増減ができます。</li>
+        <li><strong>タイマーを開始・繰り返す：</strong> <code>Space</code> キーまたは「スタート」で開始・停止します。グループ発表などを同じ時間で繰り返すときは、終了後に <code>R</code> キー（「元の時間に戻す」）を押すだけで次のセットに入れます。</li>
+        <li><strong>課題名・指示文を登録する：</strong> それぞれの入力欄に好きな言葉を入力し、<code>☆1〜3</code> や <code>★1〜3</code> の横にある <code>💾</code> ボタンを押すとブラウザに自動保存されます（空欄のまま <code>💾</code> を押すと未登録に戻せます）。</li>
+        <li><strong>全画面モードを使い分ける：</strong> 活動中は <code>F</code> キーで「時間全画面表示」、一斉に話を聞かせたいときは <code>M</code> キーで「文字全画面表示」に切り替えるとメリハリのある授業進行ができます。</li>
+      </ol>
+
+      <h3>⌨️ ショートカットキー一覧</h3>
+      <table>
+        <thead>
+          <tr><th>キー</th><th>動作</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>Space</code></td><td>スタート / ストップ（終了時の点滅・アラーム停止）</td></tr>
+          <tr><td><code>↑</code> / <code>↓</code></td><td>時間を +1分 / -1分（全画面表示中も有効）</td></tr>
+          <tr><td><code>←</code> / <code>→</code></td><td>時間を -10秒 / +10秒（微調整・全画面表示中も有効）</td></tr>
+          <tr><td><code>0</code>〜<code>9</code> または <code>T</code></td><td>時間直打ち入力を開始（自動半角・<code>Enter</code> で確定）</td></tr>
+          <tr><td><code>R</code></td><td>元の設定時間に戻す（リピートリセット）</td></tr>
+          <tr><td><code>Z</code></td><td><code>00:00</code> にする（ゼロクリア）</td></tr>
+          <tr><td><code>F</code></td><td>時間全画面表示の切替</td></tr>
+          <tr><td><code>M</code></td><td>文字全画面表示 / 解除</td></tr>
+          <tr><td><code>Esc</code></td><td>全画面・説明書・入力欄の選択を閉じる</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="clock-display" id="clockDisplay">00:00:00</div>
+
+  <div class="controls" id="controlsPanel">
+    <div class="input-row">
+      <input type="tel" id="directTimeInput" class="direct-time-input" inputmode="numeric" autocomplete="off" placeholder="例: 0321 ➔ 03:21 [0-9 / T]" onkeydown="if(event.key==='Enter') applyDirectTime()">
+      <button type="button" onclick="applyDirectTime()" class="btn-action">設定 [Enter]</button>
+      <button type="button" onclick="clearDirectTime()" class="btn-secondary">入力消去</button>
+    </div>
+
+    <div class="input-row">
+      <input type="text" id="taskInput" class="task-input" maxlength="30" placeholder="課題名（最大30文字）">
+      <button type="button" onclick="clearTaskInput()" class="btn-secondary" title="課題名を消去して非表示にする">消去</button>
+      <input type="text" id="endMsgInput" class="end-msg-input" value="終了！" placeholder="終了時メッセージ">
+    </div>
+
+    <!-- 課題名ワンクリック切替（定番4種＋ユーザー登録枠・追加可能） -->
+    <div class="chips-row">
+      <button type="button" class="chip-btn" onclick="applyPresetTask('指示されたことをやる')">指示されたことをやる</button>
+      <button type="button" class="chip-btn" onclick="applyPresetTask('グループ活動')">グループ活動</button>
+      <button type="button" class="chip-btn" onclick="applyPresetTask('発表')">発表</button>
+      <button type="button" class="chip-btn" onclick="applyPresetTask('休憩')">休憩</button>
+
+      <div class="custom-slots-container" id="customTaskSlotsContainer"></div>
+      <button type="button" id="addTaskSlotBtn" class="add-slot-btn task-add" onclick="addCustomTaskSlot()" title="登録できる課題名の枠を増やす">＋ 枠追加</button>
+    </div>
+
+    <div class="input-row">
+      <input type="text" id="alertInput" class="alert-input" value="静かに話を聞きましょう" placeholder="表示するメッセージ">
+      <button type="button" onclick="triggerFullMessage()" class="btn-alert">📢 文字全画面表示 [M]</button>
+    </div>
+
+    <!-- 指示文ワンクリック切替（定番3種＋ユーザー登録枠・追加可能） -->
+    <div class="chips-row">
+      <button type="button" class="chip-btn" onclick="applyPresetMessage('静かに話を聞きましょう')">静かに話を聞きましょう</button>
+      <button type="button" class="chip-btn" onclick="applyPresetMessage('プリントを見る')">プリントを見る</button>
+      <button type="button" class="chip-btn" onclick="applyPresetMessage('振り返り')">振り返り</button>
+
+      <div class="custom-slots-container" id="customSlotsContainer"></div>
+      <button type="button" id="addMsgSlotBtn" class="add-slot-btn" onclick="addCustomSlot()" title="登録できる言葉の枠を増やす">＋ 枠追加</button>
+    </div>
+
+    <div class="preset-buttons">
+      <button type="button" onclick="setPreset(1)" class="btn-preset">1分</button>
+      <button type="button" onclick="setPreset(2)" class="btn-preset">2分</button>
+      <button type="button" onclick="setPreset(3)" class="btn-preset">3分</button>
+      <button type="button" onclick="setPreset(4)" class="btn-preset">4分</button>
+      <button type="button" onclick="setPreset(5)" class="btn-preset">5分</button>
+      <button type="button" onclick="setPreset(10)" class="btn-preset">10分</button>
+      <button type="button" onclick="setPreset(15)" class="btn-preset">15分</button>
+      <button type="button" onclick="setPreset(20)" class="btn-preset">20分</button>
+      <button type="button" onclick="setPreset(25)" class="btn-preset">25分</button>
+      <button type="button" onclick="setPreset(30)" class="btn-preset">30分</button>
+      <button type="button" onclick="setPreset(35)" class="btn-preset">35分</button>
+      <button type="button" onclick="setPreset(40)" class="btn-preset">40分</button>
+      <button type="button" onclick="setPreset(45)" class="btn-preset">45分</button>
+      <button type="button" onclick="setPreset(50)" class="btn-preset">50分</button>
+      <button type="button" onclick="setPreset(60)" class="btn-preset">60分</button>
+    </div>
+
+    <div class="quick-buttons">
+      <button type="button" onclick="addMinutes(10)" class="btn-secondary">+10分</button>
+      <button type="button" onclick="addMinutes(1)" class="btn-secondary">+1分 [↑]</button>
+      <button type="button" onclick="addSeconds(30)" class="btn-secondary">+30秒</button>
+      <button type="button" onclick="addSeconds(-30)" class="btn-secondary">-30秒</button>
+      <button type="button" onclick="addMinutes(-1)" class="btn-secondary">-1分 [↓]</button>
+      <button type="button" onclick="addMinutes(-10)" class="btn-secondary">-10分</button>
+    </div>
+
+    <div class="buttons">
+      <button type="button" id="startBtn" onclick="startTimer()">スタート [Space]</button>
+      <button type="button" id="stopBtn" onclick="stopTimer()" class="btn-secondary">ストップ [Space]</button>
+      <button type="button" id="resetBtn" onclick="resetTimer()" class="btn-secondary" title="直前に設定した時間に戻す [R]">元の時間に戻す [R]</button>
+      <button type="button" id="clearZeroBtn" onclick="clearToZero()" class="btn-secondary" title="表示を00:00にする [Z]">00:00にする [Z]</button>
+      <button type="button" id="fullscreenBtn" onclick="toggleFullscreen()" class="btn-secondary">時間全画面表示 [F]</button>
+    </div>
+
+    <div class="audio-controls">
+      <div class="audio-group">
+        <label for="volume">音量:</label>
+        <input type="range" id="volume" min="0" max="1" step="0.01" value="0" style="width: 80px;">
+        <span id="volumeStatus" class="volume-status">0% (無音フラッシュ)</span>
+        <button type="button" onclick="testSound()" class="btn-secondary" style="padding: 2px 6px; font-size: 0.74rem;">テスト</button>
+      </div>
+      <div class="audio-group">
+        <label for="soundType">音色:</label>
+        <select id="soundType" class="sound-select">
+          <option value="beep">電子音（ピピピッ）</option>
+          <option value="chime">学校チャイム</option>
+          <option value="bell">ベル（チーン♪）</option>
+        </select>
+      </div>
+      <label class="pre-alarm-label">
+        <input type="checkbox" id="preAlarmCheck">
+        残り1分で予鈴
+      </label>
+    </div>
+
+    <div class="shortcut-info">
+      <span><kbd>Space</kbd> 開始/停止</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd> ±1分 / <kbd>←</kbd><kbd>→</kbd> ±10秒</span>
+      <span><kbd>0-9</kbd>/<kbd>T</kbd> 時間入力</span>
+      <span><kbd>R</kbd> 元の時間 / <kbd>Z</kbd> 00:00</span>
+      <span><kbd>F</kbd> 時間全画面</span>
+      <span><kbd>M</kbd> 文字全画面</span>
+    </div>
+  </div>
+
+  <script>
+    const MAX_SECONDS = 99 * 60 + 59;
+    const MAX_CUSTOM_SLOTS = 10;
+
+    let timerId = null;
+    let alarmIntervalId = null;
+    let totalSeconds = 25 * 60;
+    let initialTotalSeconds = 25 * 60;
+    let savedPresetSeconds = 25 * 60;
+    let targetEndTime = null;
+    let preAlarmFired = false;
+    let audioCtx = null;
+    let wakeLock = null;
+    let enteredFullscreenForOverlay = false;
+
+    const CUSTOM_MSG_STORAGE_KEY = 'webtimer_custom_messages_v2';
+    const CUSTOM_TASK_STORAGE_KEY = 'webtimer_custom_tasks_v1';
+    let customMessages = ['', '', ''];
+    let customTasks = ['', '', ''];
+
+    const display = document.getElementById('display');
+    const taskInput = document.getElementById('taskInput');
+    const endMsgInput = document.getElementById('endMsgInput');
+    const taskDisplay = document.getElementById('taskDisplay');
+    const divider = document.getElementById('divider');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const volumeInput = document.getElementById('volume');
+    const volumeStatus = document.getElementById('volumeStatus');
+    const soundTypeSelect = document.getElementById('soundType');
+    const preAlarmCheck = document.getElementById('preAlarmCheck');
+    const progressBar = document.getElementById('progressBar');
+    const themeBtn = document.getElementById('themeBtn');
+    const clockDisplay = document.getElementById('clockDisplay');
+
+    const fullscreenOverlay = document.getElementById('fullscreenOverlay');
+    const alertInput = document.getElementById('alertInput');
+    const overlayText = document.getElementById('overlayText');
+    const directTimeInput = document.getElementById('directTimeInput');
+    const helpModal = document.getElementById('helpModal');
+    const customSlotsContainer = document.getElementById('customSlotsContainer');
+    const customTaskSlotsContainer = document.getElementById('customTaskSlotsContainer');
+    const addTaskSlotBtn = document.getElementById('addTaskSlotBtn');
+    const addMsgSlotBtn = document.getElementById('addMsgSlotBtn');
+
+    // ボタンクリック後にフォーカスを残さない（Enterキーでの誤再実行を防止）
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.closest('button')) {
+        e.target.closest('button').blur();
+      }
+    });
+
+    // --- 音量表示のリアルタイム更新 ---
+    function updateVolumeStatus() {
+      const val = parseFloat(volumeInput.value);
+      const pct = Math.round(val * 100);
+      volumeStatus.textContent = pct === 0 ? '0% (無音フラッシュ)' : `${pct}%`;
+    }
+    volumeInput.addEventListener('input', updateVolumeStatus);
+    updateVolumeStatus();
+
+    // --- カスタム課題名（初期3枠・最大10枠まで増設可能）の読み込み・保存 ---
+    function loadCustomTasks() {
+      try {
+        const saved = localStorage.getItem(CUSTOM_TASK_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length >= 3) {
+            customTasks = parsed.slice(0, MAX_CUSTOM_SLOTS).map(v => typeof v === 'string' ? v : '');
+          }
+        }
+      } catch (e) {}
+      renderCustomTaskButtons();
+    }
+
+    function persistCustomTasks() {
+      try {
+        localStorage.setItem(CUSTOM_TASK_STORAGE_KEY, JSON.stringify(customTasks));
+      } catch (e) {}
+    }
+
+    function renderCustomTaskButtons() {
+      customTaskSlotsContainer.innerHTML = '';
+      customTasks.forEach((rawTask, i) => {
+        const task = rawTask.trim();
+        const group = document.createElement('div');
+        group.className = 'custom-slot-group task-slot';
+        group.title = 'クリックで呼出 / 💾で現在の課題名を上書き保存';
+
+        const useBtn = document.createElement('button');
+        useBtn.type = 'button';
+        useBtn.className = 'custom-chip-btn';
+        useBtn.textContent = task ? `☆${i + 1}: ${task}` : `☆${i + 1}: 未登録`;
+        useBtn.title = task ? `「${task}」をセット` : '未登録（右の💾で現在の課題名を保存）';
+        useBtn.onclick = () => useCustomTask(i);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'custom-save-btn';
+        saveBtn.id = `customTaskSaveBtn${i}`;
+        saveBtn.textContent = '💾';
+        saveBtn.title = `現在の課題名を ☆${i + 1} に保存`;
+        saveBtn.onclick = () => saveCustomTask(i);
+
+        group.appendChild(useBtn);
+        group.appendChild(saveBtn);
+
+        if (i >= 3) {
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'custom-del-btn';
+          delBtn.textContent = '×';
+          delBtn.title = `☆${i + 1} の枠を削除`;
+          delBtn.onclick = () => removeCustomTaskSlot(i);
+          group.appendChild(delBtn);
+        }
+
+        customTaskSlotsContainer.appendChild(group);
+      });
+      addTaskSlotBtn.style.display = customTasks.length >= MAX_CUSTOM_SLOTS ? 'none' : 'inline-block';
+    }
+
+    function applyPresetTask(task) {
+      taskInput.value = task;
+      updateTaskState();
+    }
+
+    function clearTaskInput() {
+      taskInput.value = '';
+      updateTaskState();
+    }
+
+    function useCustomTask(index) {
+      const task = (customTasks[index] || '').trim();
+      if (task) {
+        applyPresetTask(task);
+      } else {
+        taskInput.focus();
+        taskInput.select();
+      }
+    }
+
+    function saveCustomTask(index) {
+      const val = taskInput.value.trim();
+      if (!val && !(customTasks[index] || '').trim()) {
+        taskInput.focus();
+        return;
+      }
+      customTasks[index] = val;
+      persistCustomTasks();
+      renderCustomTaskButtons();
+
+      const saveBtn = document.getElementById(`customTaskSaveBtn${index}`);
+      if (saveBtn) {
+        const orig = saveBtn.textContent;
+        saveBtn.textContent = '✓';
+        setTimeout(() => { saveBtn.textContent = orig; }, 900);
+      }
+    }
+
+    function addCustomTaskSlot() {
+      if (customTasks.length >= MAX_CUSTOM_SLOTS) return;
+      customTasks.push('');
+      persistCustomTasks();
+      renderCustomTaskButtons();
+    }
+
+    function removeCustomTaskSlot(index) {
+      if (customTasks.length <= 3) return;
+      customTasks.splice(index, 1);
+      persistCustomTasks();
+      renderCustomTaskButtons();
+    }
+
+    // --- カスタム指示文（初期3枠・最大10枠まで増設可能）の読み込み・保存 ---
+    function loadCustomMessages() {
+      try {
+        const saved = localStorage.getItem(CUSTOM_MSG_STORAGE_KEY) || localStorage.getItem('webtimer_custom_messages_v1');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length >= 3) {
+            customMessages = parsed.slice(0, MAX_CUSTOM_SLOTS).map(v => typeof v === 'string' ? v : '');
+          }
+        }
+      } catch (e) {}
+      renderCustomMessageButtons();
+    }
+
+    function persistCustomMessages() {
+      try {
+        localStorage.setItem(CUSTOM_MSG_STORAGE_KEY, JSON.stringify(customMessages));
+      } catch (e) {}
+    }
+
+    function renderCustomMessageButtons() {
+      customSlotsContainer.innerHTML = '';
+      customMessages.forEach((rawMsg, i) => {
+        const msg = rawMsg.trim();
+        const group = document.createElement('div');
+        group.className = 'custom-slot-group';
+        group.title = 'クリックで呼出 / 💾で現在のメッセージを上書き保存';
+
+        const useBtn = document.createElement('button');
+        useBtn.type = 'button';
+        useBtn.className = 'custom-chip-btn';
+        useBtn.textContent = msg ? `★${i + 1}: ${msg}` : `★${i + 1}: 未登録`;
+        useBtn.title = msg ? `「${msg}」をセット` : '未登録（右の💾で現在の指示文を保存）';
+        useBtn.onclick = () => useCustomMessage(i);
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'button';
+        saveBtn.className = 'custom-save-btn';
+        saveBtn.id = `customSaveBtn${i}`;
+        saveBtn.textContent = '💾';
+        saveBtn.title = `現在の指示文を ★${i + 1} に保存`;
+        saveBtn.onclick = () => saveCustomMessage(i);
+
+        group.appendChild(useBtn);
+        group.appendChild(saveBtn);
+
+        if (i >= 3) {
+          const delBtn = document.createElement('button');
+          delBtn.type = 'button';
+          delBtn.className = 'custom-del-btn';
+          delBtn.textContent = '×';
+          delBtn.title = `★${i + 1} の枠を削除`;
+          delBtn.onclick = () => removeCustomSlot(i);
+          group.appendChild(delBtn);
+        }
+
+        customSlotsContainer.appendChild(group);
+      });
+      addMsgSlotBtn.style.display = customMessages.length >= MAX_CUSTOM_SLOTS ? 'none' : 'inline-block';
+    }
+
+    function applyPresetMessage(msg) {
+      alertInput.value = msg;
+      if (fullscreenOverlay.classList.contains('show')) {
+        overlayText.textContent = msg;
+      }
+    }
+
+    function useCustomMessage(index) {
+      const msg = (customMessages[index] || '').trim();
+      if (msg) {
+        applyPresetMessage(msg);
+      } else {
+        alertInput.focus();
+        alertInput.select();
+      }
+    }
+
+    function saveCustomMessage(index) {
+      const val = alertInput.value.trim();
+      if (!val && !(customMessages[index] || '').trim()) {
+        alertInput.focus();
+        return;
+      }
+      customMessages[index] = val;
+      persistCustomMessages();
+      renderCustomMessageButtons();
+
+      const saveBtn = document.getElementById(`customSaveBtn${index}`);
+      if (saveBtn) {
+        const orig = saveBtn.textContent;
+        saveBtn.textContent = '✓';
+        setTimeout(() => { saveBtn.textContent = orig; }, 900);
+      }
+    }
+
+    function addCustomSlot() {
+      if (customMessages.length >= MAX_CUSTOM_SLOTS) return;
+      customMessages.push('');
+      persistCustomMessages();
+      renderCustomMessageButtons();
+    }
+
+    function removeCustomSlot(index) {
+      if (customMessages.length <= 3) return;
+      customMessages.splice(index, 1);
+      persistCustomMessages();
+      renderCustomMessageButtons();
+    }
+
+    loadCustomTasks();
+    loadCustomMessages();
+
+    // --- Wake Lock API（画面スリープ防止） ---
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          wakeLock.addEventListener('release', () => {
+            wakeLock = null;
+          });
+        } catch (err) {}
+      }
+    }
+
+    async function releaseWakeLock() {
+      if (wakeLock !== null) {
+        try {
+          await wakeLock.release();
+          wakeLock = null;
+        } catch (err) {}
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && timerId !== null) {
+        requestWakeLock();
+        tickTimer();
+      }
+    });
+
+    // --- 時間入力欄のリアルタイム半角数字サニタイズ ---
+    function sanitizeDirectTimeInput() {
+      const sanitized = directTimeInput.value
+        .replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xfee0))
+        .replace(/\D/g, '');
+      if (directTimeInput.value !== sanitized) {
+        directTimeInput.value = sanitized;
+      }
+    }
+
+    directTimeInput.addEventListener('input', (e) => {
+      if (!e.isComposing) {
+        sanitizeDirectTimeInput();
+      }
+    });
+    directTimeInput.addEventListener('compositionend', sanitizeDirectTimeInput);
+
+    // --- 現在時刻＆終了予定時刻の表示 ---
+    function updateClock() {
+      const now = new Date();
+      const h = now.getHours().toString().padStart(2, '0');
+      const m = now.getMinutes().toString().padStart(2, '0');
+      const s = now.getSeconds().toString().padStart(2, '0');
+      let clockText = `${h}:${m}:${s}`;
+
+      if (totalSeconds > 0 && !isTimeUpActive()) {
+        const endDate = (timerId && targetEndTime)
+          ? new Date(targetEndTime)
+          : new Date(now.getTime() + totalSeconds * 1000);
+        const eh = endDate.getHours().toString().padStart(2, '0');
+        const em = endDate.getMinutes().toString().padStart(2, '0');
+        clockText += ` ｜ ${eh}:${em} 終了予定`;
+      }
+      clockDisplay.textContent = clockText;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // --- ブラウザタブタイトルのリアルタイム更新 ---
+    function updateDocumentTitle(isFinished = false) {
+      const task = taskInput.value.trim();
+      const suffix = task ? `${task} - Webタイマー` : 'Webタイマー';
+      if (isFinished) {
+        document.title = `【終了】${suffix}`;
+      } else {
+        const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
+        const s = (totalSeconds % 60).toString().padStart(2, '0');
+        document.title = `${m}:${s} | ${suffix}`;
+      }
+    }
+
+    function openModal() {
+      helpModal.classList.add('show');
+    }
+
+    function closeModal() {
+      helpModal.classList.remove('show');
+    }
+
+    function closeModalOnOverlay(e) {
+      if (e.target === helpModal) {
+        closeModal();
+      }
+    }
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark-theme');
+      const isDark = document.body.classList.contains('dark-theme');
+      themeBtn.textContent = isDark ? '☀️ ライトモード' : '🌙 ダークモード';
+    }
+
+    function updateTaskState() {
+      const val = taskInput.value.trim();
+      const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+      if (val === '') {
+        taskDisplay.classList.remove('has-text');
+        divider.classList.remove('has-text');
+        display.classList.add('solo-mode');
+      } else {
+        taskDisplay.textContent = val;
+        taskDisplay.classList.add('has-text');
+        divider.classList.add('has-text');
+        display.classList.remove('solo-mode');
+
+        const len = val.length;
+        let fontSize;
+        if (len <= 5) fontSize = isFullscreen ? 'min(12vw, 15vh)' : 'clamp(1.5rem, 6vh, 4.5vw)';
+        else if (len <= 12) fontSize = isFullscreen ? 'min(9vw, 11vh)' : 'clamp(1.2rem, 4.5vh, 3.8vw)';
+        else if (len <= 20) fontSize = isFullscreen ? 'min(7vw, 8vh)' : 'clamp(1rem, 3.5vh, 3vw)';
+        else fontSize = isFullscreen ? 'min(5vw, 6vh)' : 'clamp(0.9rem, 2.8vh, 2.2vw)';
+
+        taskDisplay.style.fontSize = fontSize;
+      }
+      updateDocumentTitle(isTimeUpActive());
+    }
+
+    function handleFullscreenChange() {
+      updateTaskState();
+      const isFullscreen = !!(document.fullscreenElement || document.webkitFullscreenElement);
+      if (!isFullscreen && enteredFullscreenForOverlay && fullscreenOverlay.classList.contains('show')) {
+        enteredFullscreenForOverlay = false;
+        fullscreenOverlay.classList.remove('show');
+      }
+    }
+
+    taskInput.addEventListener('input', updateTaskState);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    window.addEventListener('resize', updateTaskState);
+
+    function applyDirectTime() {
+      stopTimer();
+      clearTimeUpState();
+
+      sanitizeDirectTimeInput();
+      const val = directTimeInput.value;
+      
+      if (!val) {
+        directTimeInput.blur();
+        return;
+      }
+
+      const padded = val.padStart(4, '0');
+      const m = parseInt(padded.slice(-4, -2), 10);
+      const s = parseInt(padded.slice(-2), 10);
+
+      totalSeconds = Math.min(MAX_SECONDS, m * 60 + s);
+      initialTotalSeconds = totalSeconds;
+      savedPresetSeconds = totalSeconds;
+      preAlarmFired = false;
+
+      updateDisplay(totalSeconds);
+      directTimeInput.blur();
+    }
+
+    function clearDirectTime() {
+      directTimeInput.value = '';
+      directTimeInput.blur();
+    }
+
+    function triggerFullMessage() {
+      const msg = alertInput.value.trim() || "静かに話を聞きましょう";
+      overlayText.textContent = msg;
+      fullscreenOverlay.classList.add('show');
+
+      const doc = document.documentElement;
+      if (!document.fullscreenElement && !document.webkitFullscreenElement) {
+        enteredFullscreenForOverlay = true;
+        if (doc.requestFullscreen) doc.requestFullscreen().catch(() => { enteredFullscreenForOverlay = false; });
+        else if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen();
+      } else {
+        enteredFullscreenForOverlay = false;
+      }
+    }
+
+    function hideFullMessage(keepFullscreen = false) {
+      enteredFullscreenForOverlay = false;
+      fullscreenOverlay.classList.remove('show');
+      if (!keepFullscreen && (document.fullscreenElement || document.webkitFullscreenElement)) {
+        if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    }
+
+    function isTimeUpActive() {
+      return document.body.classList.contains('time-up') || document.body.classList.contains('time-up-mute');
+    }
+
+    function clearTimeUpState() {
+      stopAlarmLoop();
+      document.body.classList.remove('time-up', 'time-up-mute', 'pre-alarm-flash');
+      display.classList.remove('end-mode', 'warning-orange', 'warning-red');
+    }
+
+    function updateDisplay(sec) {
+      if (isTimeUpActive()) return;
+
+      display.classList.remove('end-mode');
+      const m = Math.floor(sec / 60).toString().padStart(2, '0');
+      const s = (sec % 60).toString().padStart(2, '0');
+      display.textContent = `${m}:${s}`;
+
+      display.classList.remove('warning-orange', 'warning-red');
+      if (timerId) {
+        if (sec <= 10 && sec > 0) {
+          display.classList.add('warning-red');
+        } else if (sec <= 60 && sec > 10) {
+          display.classList.add('warning-orange');
+        }
+      }
+
+      updateProgress();
+      updateClock();
+      updateDocumentTitle(false);
+    }
+
+    function updateProgress() {
+      if (isTimeUpActive()) {
+        progressBar.style.width = '0%';
+        return;
+      }
+      if (initialTotalSeconds > 0) {
+        const percentage = (totalSeconds / initialTotalSeconds) * 100;
+        progressBar.style.width = `${Math.min(100, Math.max(0, percentage))}%`;
+      } else {
+        progressBar.style.width = '100%';
+      }
+    }
+
+    function setPreset(min) {
+      stopTimer();
+      clearTimeUpState();
+      totalSeconds = min * 60;
+      initialTotalSeconds = totalSeconds;
+      savedPresetSeconds = totalSeconds;
+      preAlarmFired = false;
+      updateDisplay(totalSeconds);
+    }
+
+    function addMinutes(amount) { addSeconds(amount * 60); }
+
+    function addSeconds(amount) {
+      clearTimeUpState();
+      totalSeconds = Math.min(MAX_SECONDS, Math.max(0, totalSeconds + amount));
+      if (!timerId) {
+        initialTotalSeconds = totalSeconds;
+        savedPresetSeconds = totalSeconds;
+        preAlarmFired = false;
+      } else {
+        targetEndTime = Date.now() + totalSeconds * 1000;
+        if (totalSeconds > 60) {
+          preAlarmFired = false;
+        }
+      }
+      updateDisplay(totalSeconds);
+    }
+
+    function triggerPreAlarm() {
+      const volume = parseFloat(volumeInput.value);
+      if (volume === 0) {
+        document.body.classList.remove('pre-alarm-flash');
+        void document.body.offsetWidth;
+        document.body.classList.add('pre-alarm-flash');
+      } else {
+        playSoundEffect(true);
+      }
+    }
+
+    function finishTimer() {
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+      targetEndTime = null;
+      totalSeconds = 0;
+      releaseWakeLock();
+
+      const volume = parseFloat(volumeInput.value);
+      if (volume === 0) {
+        document.body.classList.add('time-up-mute');
+      } else {
+        document.body.classList.add('time-up');
+      }
+
+      display.textContent = endMsgInput.value.trim() || '終了！';
+      display.classList.add('end-mode');
+      display.classList.remove('warning-orange', 'warning-red');
+      updateProgress();
+      updateClock();
+      updateDocumentTitle(true);
+
+      startAlarmLoop();
+      resetControls();
+    }
+
+    function tickTimer() {
+      if (!timerId || !targetEndTime) return;
+      const remaining = Math.max(0, Math.ceil((targetEndTime - Date.now()) / 1000));
+      if (remaining === totalSeconds) return;
+
+      const prevSeconds = totalSeconds;
+      totalSeconds = remaining;
+      updateDisplay(totalSeconds);
+
+      if (
+        prevSeconds > 60 &&
+        totalSeconds <= 60 &&
+        totalSeconds > 0 &&
+        initialTotalSeconds > 60 &&
+        preAlarmCheck.checked &&
+        !preAlarmFired
+      ) {
+        preAlarmFired = true;
+        triggerPreAlarm();
+      }
+
+      if (totalSeconds <= 0) {
+        finishTimer();
+      }
+    }
+
+    function startTimer() {
+      if (timerId) return;
+      clearTimeUpState();
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (totalSeconds <= 0) return;
+
+      if (savedPresetSeconds <= 0) {
+        savedPresetSeconds = totalSeconds;
+      }
+      if (initialTotalSeconds <= 0) {
+        initialTotalSeconds = totalSeconds;
+      }
+
+      targetEndTime = Date.now() + totalSeconds * 1000;
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      requestWakeLock();
+      updateDisplay(totalSeconds);
+
+      timerId = setInterval(tickTimer, 250);
+    }
+
+    function stopTimer() {
+      clearTimeUpState();
+      if (timerId) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+      targetEndTime = null;
+      releaseWakeLock();
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      display.classList.remove('warning-orange', 'warning-red');
+      updateClock();
+    }
+
+    // 元の設定時間に戻す
+    function resetTimer() {
+      stopTimer();
+      clearTimeUpState();
+      totalSeconds = savedPresetSeconds;
+      initialTotalSeconds = savedPresetSeconds;
+      preAlarmFired = false;
+      updateDisplay(totalSeconds);
+      resetControls();
+    }
+
+    // 00:00にする
+    function clearToZero() {
+      stopTimer();
+      clearTimeUpState();
+      totalSeconds = 0;
+      initialTotalSeconds = 0;
+      savedPresetSeconds = 0;
+      preAlarmFired = false;
+      updateDisplay(0);
+      resetControls();
+    }
+
+    function resetControls() {
+      startBtn.disabled = false;
+      stopBtn.disabled = false;
+    }
+
+    function startAlarmLoop() {
+      stopAlarmLoop();
+      const volume = parseFloat(volumeInput.value);
+      if (volume === 0) return;
+
+      playSoundEffect(false);
+      const type = soundTypeSelect.value;
+      const intervalMs = type === 'chime' ? 3000 : (type === 'bell' ? 2200 : 1800);
+      alarmIntervalId = setInterval(() => playSoundEffect(false), intervalMs);
+    }
+
+    function stopAlarmLoop() {
+      if (alarmIntervalId) {
+        clearInterval(alarmIntervalId);
+        alarmIntervalId = null;
+      }
+    }
+
+    function playSoundEffect(isPreAlarm = false) {
+      const volume = parseFloat(volumeInput.value);
+      if (volume === 0) return;
+      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+
+      const type = soundTypeSelect.value;
+      const now = audioCtx.currentTime;
+      const vol = isPreAlarm ? volume * 0.75 : volume;
+
+      if (type === 'chime') {
+        const notes = isPreAlarm
+          ? [349.23, 440.00]
+          : [349.23, 440.00, 392.00, 261.63];
+        const step = 0.55;
+        notes.forEach((freq, idx) => {
+          const t = now + idx * step;
+          const duration = idx === notes.length - 1 ? 1.1 : 0.65;
+          const osc = audioCtx.createOscillator();
+          const oscSub = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+
+          osc.type = 'triangle';
+          oscSub.type = 'sine';
+          osc.frequency.setValueAtTime(freq, t);
+          oscSub.frequency.setValueAtTime(freq * 2, t);
+
+          const subGain = audioCtx.createGain();
+          subGain.gain.setValueAtTime(0.2, t);
+          oscSub.connect(subGain);
+
+          gain.gain.setValueAtTime(0.001, t);
+          gain.gain.linearRampToValueAtTime(vol * 0.85, t + 0.03);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + duration);
+
+          osc.connect(gain);
+          subGain.connect(gain);
+          gain.connect(audioCtx.destination);
+
+          osc.start(t);
+          oscSub.start(t);
+          osc.stop(t + duration);
+          oscSub.stop(t + duration);
+        });
+      } else if (type === 'bell') {
+        const strikes = isPreAlarm ? 1 : 2;
+        for (let s = 0; s < strikes; s++) {
+          const t = now + s * 0.7;
+          const partials = [
+            { freq: 1046.5, amp: 0.7, dur: 1.3 },
+            { freq: 2093.0, amp: 0.35, dur: 0.8 },
+            { freq: 2637.0, amp: 0.2, dur: 0.5 }
+          ];
+          partials.forEach(p => {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(p.freq, t);
+
+            gain.gain.setValueAtTime(0.001, t);
+            gain.gain.linearRampToValueAtTime(vol * p.amp, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, t + p.dur);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(t);
+            osc.stop(t + p.dur);
+          });
+        }
+      } else {
+        const count = isPreAlarm ? 2 : 4;
+        for (let i = 0; i < count; i++) {
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(880, now + i * 0.25);
+          gain.gain.setValueAtTime(vol, now + i * 0.25);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.25 + 0.18);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start(now + i * 0.25);
+          osc.stop(now + i * 0.25 + 0.18);
+        }
+      }
+    }
+
+    function testSound() {
+      if (parseFloat(volumeInput.value) === 0) {
+        volumeInput.value = '0.5';
+        updateVolumeStatus();
+      }
+      playSoundEffect(false);
+    }
+
+    function toggleFullscreen() {
+      const doc = document.documentElement;
+      const fsDoc = document.fullscreenElement || document.webkitFullscreenElement;
+
+      if (!fsDoc) {
+        if (doc.requestFullscreen) doc.requestFullscreen().catch(err => alert(err.message));
+        else if (doc.webkitRequestFullscreen) doc.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      }
+    }
+
+    window.addEventListener('keydown', (e) => {
+      const isOverlayShown = fullscreenOverlay.classList.contains('show');
+      const isModalShown = helpModal.classList.contains('show');
+      const key = e.key;
+      const code = e.code;
+
+      if (isModalShown) {
+        if (key === 'Escape') {
+          closeModal();
+        }
+        return;
+      }
+
+      if (isOverlayShown) {
+        if (key === 'Escape' || code === 'KeyM' || key === 'm' || key === 'M' || key === 'も') {
+          hideFullMessage(false);
+          return;
+        }
+        if (code === 'KeyF' || key === 'f' || key === 'F' || key === 'は') {
+          e.preventDefault();
+          hideFullMessage(true);
+          return;
+        }
+        return;
+      }
+
+      // 日本語入力（IME）変換中の誤作動を防止
+      if (e.isComposing || key === 'Process') {
+        return;
+      }
+
+      const activeEl = document.activeElement;
+      const isInputActive = activeEl && ['INPUT', 'TEXTAREA', 'SELECT'].includes(activeEl.tagName);
+
+      if (isInputActive) {
+        if (key === 'Enter' || key === 'Escape') {
+          activeEl.blur();
+        }
+        return;
+      }
+
+      // Ctrl / Cmd / Alt 併用時はブラウザ標準ショートカット（Ctrl+R更新, Ctrl+F検索等）を優先
+      if (e.ctrlKey || e.metaKey || e.altKey) {
+        return;
+      }
+
+      if (code === 'ArrowUp' || key === 'ArrowUp') {
+        e.preventDefault();
+        addMinutes(1);
+        return;
+      }
+      if (code === 'ArrowDown' || key === 'ArrowDown') {
+        e.preventDefault();
+        addMinutes(-1);
+        return;
+      }
+      if (code === 'ArrowRight' || key === 'ArrowRight') {
+        e.preventDefault();
+        addSeconds(10);
+        return;
+      }
+      if (code === 'ArrowLeft' || key === 'ArrowLeft') {
+        e.preventDefault();
+        addSeconds(-10);
+        return;
+      }
+
+      const isDigitKey = (/^Digit[0-9]$/.test(code) || /^Numpad[0-9]$/.test(code) || /^[0-9０-９]$/.test(key));
+      if (isDigitKey) {
+        e.preventDefault();
+        const normalizedDigit = key.replace(/[０-９]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xfee0));
+        const digit = /^[0-9]$/.test(normalizedDigit) ? normalizedDigit : code.slice(-1);
+        directTimeInput.focus();
+        directTimeInput.value = digit;
+        directTimeInput.setSelectionRange(1, 1);
+        return;
+      }
+
+      if (code === 'KeyT' || key === 't' || key === 'T' || key === 'か') {
+        e.preventDefault();
+        directTimeInput.focus();
+        directTimeInput.select();
+        return;
+      }
+
+      if (code === 'Space') {
+        e.preventDefault();
+        if (timerId || alarmIntervalId || isTimeUpActive()) {
+          stopTimer();
+        } else {
+          startTimer();
+        }
+      } else if (code === 'KeyR' || key === 'r' || key === 'R' || key === 'す') {
+        e.preventDefault();
+        resetTimer();
+      } else if (code === 'KeyZ' || key === 'z' || key === 'Z' || key === 'つ') {
+        e.preventDefault();
+        clearToZero();
+      } else if (code === 'KeyF' || key === 'f' || key === 'F' || key === 'は') {
+        e.preventDefault();
+        toggleFullscreen();
+      } else if (code === 'KeyM' || key === 'm' || key === 'M' || key === 'も') {
+        e.preventDefault();
+        triggerFullMessage();
+      }
+    });
+  </script>
+</body>
+</html>
